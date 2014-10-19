@@ -15,6 +15,8 @@
 #define CONFIG_MAX_CPUS 1
 #endif
 
+#define NUM_OF_SMPLS 100
+
 /**
  * We might later want to add more information to this table, such as the
  * process owner, process group or cpumask.
