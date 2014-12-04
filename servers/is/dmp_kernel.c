@@ -334,10 +334,11 @@ void proctab_dmp(void)
 	       rp->p_name,
 	       rp->p_priority,
 	       rp->p_quantum_size_ms,
-	       rp->p_user_time, rp->p_sys_time);
+	       rp->period_counter, rp->dyn_period);
 	PRINTRTS(rp);
 	printf("\n");
   }
+
 }
 #endif				/* defined(__i386__) */
 
@@ -347,6 +348,102 @@ void proctab_dmp(void)
     /* LSC FIXME: Not implemented for arm */
 }
 #endif				/* defined(__arm__) */
+
+/*===========================================================================*
+ *                             message_list                                  *
+ *===========================================================================*/
+#if defined(__i386__)
+void message_list(void)
+{
+/* Show the message list for each process to and count for each the messages
+ * that are in wating mode to send or receive*/
+	
+	register struct proc *rp;
+	static struct proc *oldrp = BEG_PROC_ADDR;
+	int r;
+
+	/* obtain a fresh copy of the current process table */
+	if((r = sys_getproctab(proc)) != OK){
+		printf("IS: warning: couldn't get copy of process table: %d\n",r);
+		return;
+	}
+
+	int pagelines = 0;
+	for(rp = oldrp; rp < END_PROC_ADDR; rp++){
+		oldrp = BEG_PROC_ADDR;
+		if (isemptyp(rp)) continue;
+		if (proc_nr(rp) > 255) continue;
+		if (proc_nr(rp) < 0) continue;
+		if (proc_nr(rp) == IDLE) continue;
+		if (++pagelines > 2) { oldrp = rp; printf("--more--\n"); break;}
+
+
+		printf("\n--i--nr--on--from---to---type\n");		
+		
+		char *tmp1 = "";
+		char *tmp2 = "";
+		
+		if( proc_nr(rp) >= 0 && proc_nr(rp) <= 255){
+			for(int j = 0; j < 50; j++){
+				if(rp->msgList[0][j] == 2) continue;
+				if(rp->msgList[0][j] == 0) continue;
+				if(rp->msgList[0][j] == 2) tmp1 = "DONE";
+				else if(rp->msgList[0][j] == 1) tmp1 = "WAIT";
+				else tmp1 = "unk";
+				
+				if(rp->msgList[4][j] == 1) tmp2 = "SEND";
+				else if(rp->msgList[4][j] == 2) tmp2="RECEIVE";
+				else if(rp->msgList[4][j] == 3)	tmp2="SEND/REC";
+				else if(rp->msgList[4][j] == 4) tmp2="NOTIFY";	
+				else tmp2="TBA";	
+		
+				printf(" %2d %s %3s %2d %9d %4s\n",
+					j,proc_name(rp->msgList[1][j]),
+					tmp1,
+					rp->msgList[2][j],
+					rp->msgList[3][j],
+					tmp2);
+			}
+		
+		printf("\n------------------Stats-------------------\n");
+		
+		int msgOnCounter = 0;
+		int msgOffCounter = 0;
+		int msgAllCounter = 0;
+		int msgSend = 0;
+		int msgRec = 0;
+		int msgNot = 0;
+		int msgSendRec = 0;
+
+		for(int j = 0; j < 50; j++){
+			if(rp->msgList[0][j] == 1) msgOnCounter++;
+			if(rp->msgList[0][j] == 2 
+				|| rp->msgList[0][j] == 1) msgAllCounter++;
+			if(rp->msgList[0][j] == 2) msgOffCounter++;
+			if(rp->msgList[4][j] == 1) msgSend++;
+			else if(rp->msgList[4][j] == 2) msgRec++;
+			else if(rp->msgList[4][j] == 3) msgSendRec++;
+			else if(rp->msgList[4][j] == 4) msgNot++;
+		}
+		
+		printf("All : %d \t Waiting : %d \t Done : %d\n",
+			msgAllCounter, msgOnCounter, msgOffCounter);
+		printf("Send : %d \t Rec : %d \n",
+			msgSend, msgRec);
+		printf("Not : %d \t SendRec : %d \n",
+			msgNot, msgSendRec);	
+
+		}
+	}
+
+}
+#endif
+#if defined(__arm__)
+void message_list(void)
+{
+
+}
+#endif
 
 /*===========================================================================*
  *				procstack_dmp  				     *

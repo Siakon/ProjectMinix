@@ -76,6 +76,8 @@ void reset_proc_accounting(struct proc *p);
 void flag_account(struct proc *p, int flag);
 int try_deliver_senda(struct proc *caller_ptr, asynmsg_t *table, size_t
 	size);
+void log_msg(struct proc *caller_ptr, int call_nr, endpoint_t dst_e);
+void update_msg(struct proc *caller_ptr, int call_nr, endpoint_t src_e);
 
 /* start.c */
 void cstart();

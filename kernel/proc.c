@@ -116,6 +116,8 @@ void proc_init(void)
 	struct proc * rp;
 	struct priv *sp;
 	int i;
+	//rp->head = malloc(sizeof(struct msgList));
+	//rp->tail = malloc(sizeof(struct msgList));
 
 	/* Clear the process table. Anounce each slot as empty and set up
 	 * mappings for proc_addr() and proc_nr() macros. Do the same for the
@@ -129,7 +131,16 @@ void proc_init(void)
 		rp->p_scheduler = NULL;		/* no user space scheduler */
 		rp->p_priority = 0;		/* no priority */
 		rp->p_quantum_size_ms = 0;	/* no quantum size */
-
+		rp->period_counter = 0;		/* initialize the period cnt */
+		rp->system_process = 0;
+		//rp->head = NULL;	/* Initialize the head of the list*/
+		//rp->tail = NULL;		
+		for(int i = 0; i<5; i++){
+			for(int j = 0; j<50; j++){
+				rp->msgList[i][j] = 0;
+			}
+		}
+		rp->msgCnt = 0;		
 		/* arch-specific initialization */
 		arch_proc_reset(rp);
 	}
@@ -399,6 +410,7 @@ check_misc_flags:
 	 * restore_user_context() carries out the actual mode switch from kernel
 	 * to userspace. This function does not return
 	 */
+	
 	restore_user_context(p);
 	NOT_REACHABLE;
 }
@@ -590,7 +602,25 @@ int do_ipc(reg_t r1, reg_t r2, reg_t r3)
   	{
   	    /* Process accounting for scheduling */
 	    caller_ptr->p_accounting.ipc_sync++;
+	    
+	    //struct msglist* newmsgList = malloc(sizeof(struct msgList));
+	    /*struct node** headRef = &caller_ptr->head;
+	    
+  	    caller_ptr->newmsgList->dest_p_msg = caller_ptr;
+	    caller_ptr->newmsgList->src_p_msg  = r2;
+	    caller_ptr->newmsgList->next       = *headRef;
+	    *headRef	  		       = caller_ptr->newmsgList;
 
+	    if(caller_ptr->msgCnt < 50){
+		    caller_ptr->msgList[0][caller_ptr->msgCnt] = 1;
+		    caller_ptr->msgList[1][caller_ptr->msgCnt] = caller_ptr->p_nr; 
+		    caller_ptr->msgList[2][caller_ptr->msgCnt] = caller_ptr->p_endpoint;
+		    caller_ptr->msgList[3][caller_ptr->msgCnt] = r2;
+	 	    caller_ptr->msgList[4][caller_ptr->msgCnt] = call_nr;
+		    caller_ptr->msgCnt++;
+	    }else{
+		caller_ptr->msgCnt = 0;
+	    } */
   	    return do_sync_ipc(caller_ptr, call_nr, (endpoint_t) r2,
 			    (message *) r3);
   	}
@@ -818,6 +848,7 @@ int mini_send(
 	return EDEADSRCDST;
   }
 
+  
   /* Check if 'dst' is blocked waiting for this message. The destination's 
    * RTS_SENDING flag may be set when its SENDREC call blocked while sending.  
    */
@@ -843,6 +874,8 @@ int mini_send(
 
 	if (dst_ptr->p_misc_flags & MF_REPLY_PEND)
 		dst_ptr->p_misc_flags &= ~MF_REPLY_PEND;
+	
+	update_msg(dst_ptr, RECEIVE, caller_ptr->p_endpoint);			
 
 	RTS_UNSET(dst_ptr, RTS_RECEIVING);
 
@@ -851,6 +884,7 @@ int mini_send(
 	hook_ipc_msgrecv(&dst_ptr->p_delivermsg, caller_ptr, dst_ptr);
 #endif
   } else {
+	int call;
 	if(flags & NON_BLOCKING) {
 		return(ENOTREADY);
 	}
@@ -873,6 +907,10 @@ int mini_send(
 		 */
 		caller_ptr->p_misc_flags |= MF_SENDING_FROM_KERNEL;
 	}
+
+	call = (caller_ptr->p_misc_flags & MF_REPLY_PEND ? SENDREC
+		: (flags & NON_BLOCKING ? SENDNB : SEND));
+	log_msg(caller_ptr, call, dst_e);
 
 	RTS_SET(caller_ptr, RTS_SENDING);
 	caller_ptr->p_sendto_e = dst_e;
@@ -919,7 +957,7 @@ static int mini_receive(struct proc * caller_ptr,
 		return EDEADSRCDST;
 	}
   }
-
+  
 
   /* Check to see if a message from desired source is already available.  The
    * caller's RTS_SENDING flag may be set if SENDREC couldn't send. If it is
@@ -954,6 +992,9 @@ static int mini_receive(struct proc * caller_ptr,
 	    caller_ptr->p_misc_flags |= MF_DELIVERMSG;
 
 	    IPC_STATUS_ADD_CALL(caller_ptr, NOTIFY);
+
+	    /* Update to done */
+	    update_msg(proc_addr(src_proc_nr), SEND, caller_ptr->p_endpoint);
 
 	    goto receive_done;
         }
@@ -991,7 +1032,10 @@ static int mini_receive(struct proc * caller_ptr,
 
 	    call = (sender->p_misc_flags & MF_REPLY_PEND ? SENDREC : SEND);
 	    IPC_STATUS_ADD_CALL(caller_ptr, call);
-
+	    
+            /* Update the msg and set it to done. */
+	    update_msg(sender, call, caller_ptr->p_endpoint);
+	
 	    /*
 	     * if the message is originaly from the kernel on behalf of this
 	     * process, we must send the status flags accordingly
@@ -1027,6 +1071,9 @@ static int mini_receive(struct proc * caller_ptr,
 
       caller_ptr->p_getfrom_e = src_e;		
       RTS_SET(caller_ptr, RTS_RECEIVING);
+      
+      log_msg(caller_ptr, RECEIVE, src_e);
+
       return(OK);
   } else {
 	return(ENOTREADY);
@@ -1035,6 +1082,10 @@ static int mini_receive(struct proc * caller_ptr,
 receive_done:
   if (caller_ptr->p_misc_flags & MF_REPLY_PEND)
 	  caller_ptr->p_misc_flags &= ~MF_REPLY_PEND;
+
+  /* Update the log when the message is delivered, 2 - done */
+  update_msg(caller_ptr, RECEIVE, src_e);  
+	
   return OK;
 }
 
@@ -1054,9 +1105,12 @@ int mini_notify(
 	util_stacktrace();
 	printf("mini_notify: bogus endpoint %d\n", dst_e);
 	return EDEADSRCDST;
-  }
+  }  
 
   dst_ptr = proc_addr(dst_p);
+
+  /* Log the notify msg */
+  log_msg( caller_ptr, NOTIFY, dst_e );
 
   /* Check to see if target is blocked waiting for this message. A process 
    * can be both sending and receiving during a SENDREC system call.
@@ -1075,6 +1129,9 @@ int mini_notify(
 
       IPC_STATUS_ADD_CALL(dst_ptr, NOTIFY);
       RTS_UNSET(dst_ptr, RTS_RECEIVING);
+
+      /*update the message with done 2 - done */
+      update_msg( caller_ptr, NOTIFY, dst_e );
 
       return(OK);
   } 
@@ -1725,6 +1782,26 @@ static struct proc * pick_proc(void)
 	assert(proc_is_runnable(rp));
 	if (priv(rp)->s_flags & BILLABLE)	 	
 		get_cpulocal_var(bill_ptr) = rp; /* bill for system time */
+
+	if(priv(rp)->s_flags & SYS_PROC){
+	
+	if( rp->period_counter == NUM_OF_SMPLS){
+		int k;
+		int count_p = 0;
+		for( k=0; k<NUM_OF_SMPLS; k++){
+			count_p += rp->curr_periods[k];
+		}
+		rp->dyn_period = 0;
+		rp->dyn_period = count_p/NUM_OF_SMPLS;
+		rp->period_counter++;
+		rp->system_process = 1;
+	}else if( rp->period_counter < NUM_OF_SMPLS && rp->period_counter >= 0 ){
+		rp->curr_periods[rp->period_counter] = 0;
+		rp->curr_periods[rp->period_counter] = rp->p_accounting.time_in_queue + ms_2_cpu_time(rp->p_quantum_size_ms);
+		rp->period_counter++;
+	}
+
+	}
 	return rp;
   }
   return NULL;
@@ -1824,6 +1901,22 @@ void proc_no_time(struct proc * p)
 		 * be renewed. In fact, they by pass scheduling
 		 */
 		p->p_cpu_time_left = ms_2_cpu_time(p->p_quantum_size_ms);
+		
+		/*
+		if(p->period_counter == NUM_OF_SMPLS){
+			int count_p = 0;
+			p->dyn_period = 0;
+			for(int k=0; k<NUM_OF_SMPLS; k++){
+				count_p += p->curr_periods[k]; 
+			}
+			p->dyn_period = count_p/NUM_OF_SMPLS;
+			p->period_counter++;
+		}else if(p->period_counter < NUM_OF_SMPLS && p->period_counter <= 0){
+			p->curr_periods[p->period_counter] = 0;
+			p->curr_periods[p->period_counter] = p->p_cpu_time_left + p->p_accounting.time_in_queue;
+			p->period_counter++;
+		}*/
+		p->was_on_no_q++;
 #if DEBUG_RACE
 		RTS_SET(p, RTS_PREEMPTED);
 		RTS_UNSET(p, RTS_PREEMPTED);
@@ -1887,4 +1980,50 @@ void release_fpu(struct proc * p) {
 
 	if (*fpu_owner_ptr == p)
 		*fpu_owner_ptr = NULL;
+}
+
+void log_msg(struct proc *caller_ptr, int call_nr, endpoint_t src_dst_e){
+int validate = 0;
+	
+	for(int i=0; i<50; i++){
+		if(caller_ptr->msgList[2][i] == caller_ptr->p_endpoint &&
+		   caller_ptr->msgList[3][i] == src_dst_e &&
+		   caller_ptr->msgList[4][i] == call_nr && 
+		   (caller_ptr->msgList[0][i] == 1)){
+			validate = 1;
+			break;
+		}
+	}	
+	
+	if(validate == 0){	
+
+	if(caller_ptr->msgCnt < 50 && caller_ptr->msgCnt >= 0){
+start_logging:	
+		caller_ptr->msgList[0][caller_ptr->msgCnt] = 1;
+		caller_ptr->msgList[1][caller_ptr->msgCnt] = caller_ptr->p_nr;
+		caller_ptr->msgList[2][caller_ptr->msgCnt] = caller_ptr->p_endpoint;
+		caller_ptr->msgList[3][caller_ptr->msgCnt] = src_dst_e;
+		caller_ptr->msgList[4][caller_ptr->msgCnt] = call_nr;
+		caller_ptr->msgCnt++;
+	}else{
+		caller_ptr->msgCnt = 0;
+		goto start_logging;
+	}		
+
+	}
+}
+
+void update_msg(struct proc *caller_ptr, int call_nr, endpoint_t src_dst_e){
+	
+	for(int i = 0; i < 50; i++){
+		if(caller_ptr->msgList[2][i] == caller_ptr->p_endpoint &&
+		   caller_ptr->msgList[3][i] == src_dst_e &&
+		   caller_ptr->msgList[4][i] == call_nr && 
+		   (caller_ptr->msgList[0][i] == 0 ||
+   	 	    caller_ptr->msgList[0][i] == 1)){
+			caller_ptr->msgList[0][i] = 2;
+			break;
+		}
+	}
+	
 }

@@ -383,83 +383,7 @@ includes ===> share/misc
 includes ===> share/mk
 includes ===> share/terminfo
 includes ===> share/zoneinfo
-     create  kernel/procoffsets.h
-    compile  kernel/head.o
-    compile  kernel/pre_init.o
-    compile  kernel/direct_tty_utils.o
-    compile  kernel/io_outb.o
-    compile  kernel/io_inb.o
-    compile  kernel/pg_utils.o
-    compile  kernel/klib.o
-    compile  kernel/utility.o
-    compile  kernel/arch_reset.o
-    compile  kernel/_cpufeature.o
-    compile  kernel/_cpuid.o
-    compile  kernel/get_bp.o
-    compile  kernel/findfp.o
-    compile  kernel/strcat.o
-    compile  kernel/strlen.o
-    compile  kernel/memcpy.o
-    compile  kernel/strcpy.o
-    compile  kernel/strncmp.o
-    compile  kernel/memset.o
-    compile  kernel/memmove.o
-    compile  kernel/strcmp.o
-    compile  kernel/atoi.o
-    compile  kernel/ctype_.o
-    compile  kernel/strtol.o
-    compile  kernel/_errno.o
-    compile  kernel/errno.o
-    compile  kernel/udivdi3.o
-    compile  kernel/umoddi3.o
-    compile  kernel/qdivrem.o
-    compile  kernel/assert.o
-    compile  kernel/kprintf.o
-    compile  kernel/stacktrace.o
-    compile  kernel/vprintf.o
-    compile  kernel/mpx.o
-    compile  kernel/arch_clock.o
-    compile  kernel/arch_do_vmctl.o
-    compile  kernel/arch_system.o
-    compile  kernel/do_iopenable.o
-    compile  kernel/do_readbios.o
-    compile  kernel/do_sdevio.o
-    compile  kernel/exception.o
-    compile  kernel/i8259.o
-    compile  kernel/io_inl.o
-    compile  kernel/io_intr.o
-    compile  kernel/io_inw.o
-    compile  kernel/io_outl.o
-    compile  kernel/io_outw.o
-    compile  kernel/memory.o
-    compile  kernel/oxpcie.o
-    compile  kernel/protect.o
-    compile  kernel/usermapped_glo_ipc.o
-    compile  kernel/usermapped_data_arch.o
-    compile  kernel/acpi.o
-    compile  kernel/apic.o
-    compile  kernel/apic_asm.o
-    compile  kernel/breakpoints.o
-    compile  kernel/debugreg.o
-    compile  kernel/arch_watchdog.o
-    compile  kernel/clock.o
-    compile  kernel/cpulocals.o
-    compile  kernel/interrupt.o
-    compile  kernel/main.o
     compile  kernel/proc.o
-proc.c:1113:12: warning: passing 'const struct proc *' to parameter of type 'struct proc *' discards qualifiers [-Wincompatible-pointer-types]
-  log_msg( caller_ptr, NOTIFY, dst_e );
-           ^~~~~~~~~~
-/usr/src/kernel/proto.h:79:27: note: passing argument to parameter 'caller_ptr' here
-void log_msg(struct proc *caller_ptr, int call_nr, endpoint_t dst_e);
-                          ^
-proc.c:1134:19: warning: passing 'const struct proc *' to parameter of type 'struct proc *' discards qualifiers [-Wincompatible-pointer-types]
-      update_msg( caller_ptr, NOTIFY, dst_e );
-                  ^~~~~~~~~~
-/usr/src/kernel/proto.h:80:30: note: passing argument to parameter 'caller_ptr' here
-void update_msg(struct proc *caller_ptr, int call_nr, endpoint_t src_e);
-                             ^
-2 warnings generated.
     compile  kernel/system.o
     compile  kernel/table.o
     compile  kernel/usermapped_data.o
@@ -498,7 +422,6 @@ void update_msg(struct proc *caller_ptr, int call_nr, endpoint_t src_e);
     compile  kernel/do_schedule.o
     compile  kernel/do_schedctl.o
     compile  kernel/do_statectl.o
-    compile  kernel/do_rt_sample.o
     compile  kernel/do_devio.o
     compile  kernel/do_vdevio.o
     compile  kernel/watchdog.o
@@ -1061,7 +984,7 @@ all ===> ramdisk
 all ===> memory
     compile  memory/memory.o
      create  Generating ramdisk image
-dynamically sized filesystem: 658 blocks, 402 inodes
+dynamically sized filesystem: 659 blocks, 402 inodes
      create  memory/imgrd.o
        link  memory/memory
 install ===> ahci
@@ -1161,5 +1084,5 @@ install ===> virtio_net
 install ===> ramdisk
 install ===> memory
     install  /usr/sbin/memory
-rm /dev/c0d0p0s0:/boot/minix/3.2.1r56-841b3d2
+rm /dev/c0d0p0s0:/boot/minix/3.2.1r20-841b3d2
 Done.
